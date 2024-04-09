@@ -1,0 +1,37 @@
+.box-container li {
+    list-style: none;
+    margin-left: 92px;
+    margin-top: 30px;
+    cursor: pointer;
+    font-family: "Raleway", sans-serif;
+    font-size: 20px;
+    font-weight: bold;
+    color: #cccccc;
+    border: 2px solid;
+    padding: 13px;
+    transition: color 0.5s, background-color 0.5s; 
+}
+
+.box-container li:hover {
+    color: rgb(221, 221, 178);
+    background-color: #2d2b85;
+}
+
+.box-container {
+    background-color: #1b1a55;
+    padding-bottom: 23px;
+    margin-top: 10px;
+}
+
+.post-section .container {
+    padding-top: 80px;
+    height: 100vh;
+}
+
+.post-box {
+    margin-bottom: 100px;
+    background-color: #1b1a55;
+    padding: 35px 50px 50px 50px;
+    border: 2px solid white;
+    border-radius: 12px;
+}

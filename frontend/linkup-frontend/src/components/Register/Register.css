@@ -1,0 +1,62 @@
+.register-container {
+    background-color: #1B1A55;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+.register-box{
+    background-color: white;
+    padding: 70px;
+}
+
+.register-container h2 {
+    text-align: center;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+.form-group input[type="checkbox"] {
+    width: auto;
+    margin-right: 5px;
+}
+
+.submit-btn {
+    width: 100%;
+    padding: 10px;
+
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+
+
+.register-container p {
+    margin-top: 10px;
+}
+
+.register-container p a {
+    color: #0906df;
+    text-decoration: none;
+}
+
+.register-container p a:hover {
+    text-decoration: underline;
+}

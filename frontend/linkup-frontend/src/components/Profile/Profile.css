@@ -1,0 +1,27 @@
+.info-container{
+    margin-top: 90px;
+    margin-right: 50px;
+    margin-left: 50px;
+}
+
+.name-box{
+    margin-left: 29px;
+}
+
+.contact-info, .personal-info, .account-status{
+    padding: 70px 70px 70px 70px;
+}
+
+.profile-box h1{
+    margin-bottom: 50px;
+    color:rgb(151, 223, 223) !important;
+}
+
+.profile-box span{
+    font-size: 20px;
+}
+
+.edit-btn{
+    margin-right: 45px;
+    margin-top: 25px;
+}

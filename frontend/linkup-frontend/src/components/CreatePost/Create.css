@@ -1,0 +1,35 @@
+
+
+.status-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.status-input {
+    width: 70%;
+    height: 100px;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    margin: 70px 20px;
+}
+
+.status-input.error {
+    border: 2px solid red; 
+}
+.post-button {
+    padding: 20px 40px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 19px;
+}
+
+.post-button:hover {
+    background-color: #0056b3;
+}

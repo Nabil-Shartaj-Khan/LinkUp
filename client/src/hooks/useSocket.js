@@ -42,69 +42,195 @@ export default function useSocket({
     // register socket event listeners
     useEffect(() => {
 
-        // handle new real-time message
-        const handleNewMessage = (message) => {
+        // get current logged-in user id
+        const getCurrentUserId = () => {
 
-            setMessages((previousMessages) => {
-
-                if (
-                    Number(message.conversationId) !==
-                    Number(selectedConversation?.id)
-                ) {
-                    return previousMessages;
-                }
+            const storedUser =
+                localStorage.getItem(
+                    "linkup_user"
+                );
 
 
-                const messageAlreadyExists =
-                    previousMessages.some(
-                        (existingMessage) =>
-                            Number(existingMessage.id) ===
-                            Number(message.id)
-                    );
-
-
-                if (messageAlreadyExists) {
-                    return previousMessages;
-                }
-
-
-                return [
-                    ...previousMessages,
-                    message,
-                ];
-            });
-
-
-            // stop typing when the user's message arrives
-            if (
-                Number(message.conversationId) ===
-                Number(selectedConversation?.id)
-            ) {
-
-                setTypingUserId((previousUserId) => {
-
-                    if (
-                        Number(previousUserId) ===
-                        Number(message.sender?.id)
-                    ) {
-                        return null;
-                    }
-
-
-                    return previousUserId;
-                });
+            if (!storedUser) {
+                return null;
             }
 
 
-            // update conversation preview
+            try {
+
+                const currentUser =
+                    JSON.parse(storedUser);
+
+
+                return Number(
+                    currentUser.id
+                );
+
+            } catch (error) {
+
+                console.error(
+                    "stored user parse error:",
+                    error
+                );
+
+
+                return null;
+            }
+        };
+
+
+        // handle newly created conversation
+        const handleNewConversation = (
+            conversation
+        ) => {
+
+            // join the new conversation room
+            socket.emit(
+                "join_conversation",
+                conversation.id
+            );
+
+
+            setConversations(
+                (previousConversations) => {
+
+                    const conversationExists =
+                        previousConversations.some(
+                            (existingConversation) =>
+                                Number(
+                                    existingConversation.id
+                                ) ===
+                                Number(
+                                    conversation.id
+                                )
+                        );
+
+
+                    if (conversationExists) {
+                        return previousConversations;
+                    }
+
+
+                    return [
+                        conversation,
+                        ...previousConversations,
+                    ];
+                }
+            );
+        };
+
+
+        // handle new real-time message
+        const handleNewMessage = (message) => {
+
+            const currentUserId =
+                getCurrentUserId();
+
+
+            const isReceivedMessage =
+                currentUserId &&
+                Number(message.sender?.id) !==
+                currentUserId;
+
+
+            const isConversationOpen =
+                Number(message.conversationId) ===
+                Number(selectedConversation?.id);
+
+
+            // acknowledge message delivery
+            if (isReceivedMessage) {
+
+                socket.emit(
+                    "message_delivered",
+                    message.id
+                );
+            }
+
+
+            // acknowledge message read when conversation is open
+            if (
+                isReceivedMessage &&
+                isConversationOpen
+            ) {
+
+                socket.emit(
+                    "message_read",
+                    message.id
+                );
+            }
+
+
+            setMessages(
+                (previousMessages) => {
+
+                    if (!isConversationOpen) {
+                        return previousMessages;
+                    }
+
+
+                    const messageAlreadyExists =
+                        previousMessages.some(
+                            (existingMessage) =>
+                                Number(
+                                    existingMessage.id
+                                ) ===
+                                Number(
+                                    message.id
+                                )
+                        );
+
+
+                    if (messageAlreadyExists) {
+                        return previousMessages;
+                    }
+
+
+                    return [
+                        ...previousMessages,
+                        message,
+                    ];
+                }
+            );
+
+
+            // stop typing when the user's message arrives
+            if (isConversationOpen) {
+
+                setTypingUserId(
+                    (previousUserId) => {
+
+                        if (
+                            Number(
+                                previousUserId
+                            ) ===
+                            Number(
+                                message.sender?.id
+                            )
+                        ) {
+                            return null;
+                        }
+
+
+                        return previousUserId;
+                    }
+                );
+            }
+
+
+            // update conversation preview and unread count
             setConversations(
                 (previousConversations) => {
 
                     const conversationExists =
                         previousConversations.some(
                             (conversation) =>
-                                Number(conversation.id) ===
-                                Number(message.conversationId)
+                                Number(
+                                    conversation.id
+                                ) ===
+                                Number(
+                                    message.conversationId
+                                )
                         );
 
 
@@ -118,26 +244,67 @@ export default function useSocket({
                             (conversation) => {
 
                                 if (
-                                    Number(conversation.id) ===
-                                    Number(message.conversationId)
+                                    Number(
+                                        conversation.id
+                                    ) !==
+                                    Number(
+                                        message.conversationId
+                                    )
                                 ) {
-                                    return {
-                                        ...conversation,
-
-                                        lastMessage: {
-                                            id: message.id,
-                                            content:
-                                                message.content,
-                                            type:
-                                                message.type,
-                                            createdAt:
-                                                message.createdAt,
-                                        },
-                                    };
+                                    return conversation;
                                 }
 
 
-                                return conversation;
+                                let unreadCount =
+                                    Number(
+                                        conversation.unreadCount ||
+                                        0
+                                    );
+
+
+                                // increase unread count only for incoming messages
+                                // when the conversation is not currently open
+                                if (
+                                    isReceivedMessage &&
+                                    !isConversationOpen
+                                ) {
+
+                                    unreadCount += 1;
+                                }
+
+
+                                // open conversations have no unread messages
+                                if (
+                                    isReceivedMessage &&
+                                    isConversationOpen
+                                ) {
+
+                                    unreadCount = 0;
+                                }
+
+
+                                return {
+                                    ...conversation,
+
+                                    unreadCount,
+
+                                    lastMessage: {
+                                        id:
+                                            message.id,
+
+                                        senderId:
+                                            message.sender?.id,
+
+                                        content:
+                                            message.content,
+
+                                        type:
+                                            message.type,
+
+                                        createdAt:
+                                            message.createdAt,
+                                    },
+                                };
                             }
                         );
 
@@ -175,6 +342,80 @@ export default function useSocket({
         };
 
 
+        // handle message delivery update
+        const handleMessageDeliveryUpdated = (
+            data
+        ) => {
+
+            setMessages(
+                (previousMessages) =>
+                    previousMessages.map(
+                        (message) => {
+
+                            if (
+                                Number(
+                                    message.id
+                                ) !==
+                                Number(
+                                    data.messageId
+                                )
+                            ) {
+                                return message;
+                            }
+
+
+                            return {
+                                ...message,
+
+                                status:
+                                    "delivered",
+
+                                deliveredAt:
+                                    data.deliveredAt,
+                            };
+                        }
+                    )
+            );
+        };
+
+
+        // handle message read update
+        const handleMessageReadUpdated = (
+            data
+        ) => {
+
+            setMessages(
+                (previousMessages) =>
+                    previousMessages.map(
+                        (message) => {
+
+                            if (
+                                Number(
+                                    message.id
+                                ) !==
+                                Number(
+                                    data.messageId
+                                )
+                            ) {
+                                return message;
+                            }
+
+
+                            return {
+                                ...message,
+
+                                status:
+                                    "read",
+
+                                readAt:
+                                    data.readAt,
+                            };
+                        }
+                    )
+            );
+        };
+
+
         // handle deleted conversation
         const handleConversationDeleted = (
             data
@@ -184,18 +425,28 @@ export default function useSocket({
                 (previousConversations) =>
                     previousConversations.filter(
                         (conversation) =>
-                            Number(conversation.id) !==
-                            Number(data.conversationId)
+                            Number(
+                                conversation.id
+                            ) !==
+                            Number(
+                                data.conversationId
+                            )
                     )
             );
 
 
             if (
-                Number(selectedConversation?.id) ===
-                Number(data.conversationId)
+                Number(
+                    selectedConversation?.id
+                ) ===
+                Number(
+                    data.conversationId
+                )
             ) {
 
-                setSelectedConversation(null);
+                setSelectedConversation(
+                    null
+                );
 
                 setMessages([]);
 
@@ -205,7 +456,9 @@ export default function useSocket({
 
 
         // handle online and offline presence
-        const handleUserPresence = (data) => {
+        const handleUserPresence = (
+            data
+        ) => {
 
             setConversations(
                 (previousConversations) =>
@@ -214,9 +467,12 @@ export default function useSocket({
 
                             if (
                                 Number(
-                                    conversation.user?.id
+                                    conversation
+                                        .user?.id
                                 ) !==
-                                Number(data.userId)
+                                Number(
+                                    data.userId
+                                )
                             ) {
                                 return conversation;
                             }
@@ -227,8 +483,10 @@ export default function useSocket({
 
                                 user: {
                                     ...conversation.user,
+
                                     isOnline:
                                         data.isOnline,
+
                                     lastSeen:
                                         data.lastSeen,
                                 },
@@ -244,9 +502,12 @@ export default function useSocket({
                     if (
                         !previousConversation ||
                         Number(
-                            previousConversation.user?.id
+                            previousConversation
+                                .user?.id
                         ) !==
-                        Number(data.userId)
+                        Number(
+                            data.userId
+                        )
                     ) {
                         return previousConversation;
                     }
@@ -257,8 +518,10 @@ export default function useSocket({
 
                         user: {
                             ...previousConversation.user,
+
                             isOnline:
                                 data.isOnline,
+
                             lastSeen:
                                 data.lastSeen,
                         },
@@ -269,11 +532,17 @@ export default function useSocket({
 
 
         // handle typing indicator
-        const handleUserTyping = (data) => {
+        const handleUserTyping = (
+            data
+        ) => {
 
             if (
-                Number(data.conversationId) !==
-                Number(selectedConversation?.id)
+                Number(
+                    data.conversationId
+                ) !==
+                Number(
+                    selectedConversation?.id
+                )
             ) {
                 return;
             }
@@ -282,7 +551,9 @@ export default function useSocket({
             if (data.isTyping) {
 
                 setTypingUserId(
-                    Number(data.userId)
+                    Number(
+                        data.userId
+                    )
                 );
 
             } else {
@@ -291,8 +562,12 @@ export default function useSocket({
                     (previousUserId) => {
 
                         if (
-                            Number(previousUserId) ===
-                            Number(data.userId)
+                            Number(
+                                previousUserId
+                            ) ===
+                            Number(
+                                data.userId
+                            )
                         ) {
                             return null;
                         }
@@ -306,8 +581,23 @@ export default function useSocket({
 
 
         socket.on(
+            "new_conversation",
+            handleNewConversation
+        );
+
+        socket.on(
             "new_message",
             handleNewMessage
+        );
+
+        socket.on(
+            "message_delivery_updated",
+            handleMessageDeliveryUpdated
+        );
+
+        socket.on(
+            "message_read_updated",
+            handleMessageReadUpdated
         );
 
         socket.on(
@@ -329,8 +619,23 @@ export default function useSocket({
         return () => {
 
             socket.off(
+                "new_conversation",
+                handleNewConversation
+            );
+
+            socket.off(
                 "new_message",
                 handleNewMessage
+            );
+
+            socket.off(
+                "message_delivery_updated",
+                handleMessageDeliveryUpdated
+            );
+
+            socket.off(
+                "message_read_updated",
+                handleMessageReadUpdated
             );
 
             socket.off(

@@ -52,6 +52,39 @@ const sendMessage = async (req, res) => {
             ]
         );
 
+        // get all recipients except the sender
+        const [recipients] = await db.query(
+            `SELECT user_id
+            FROM conversation_members
+            WHERE conversation_id = ?
+            AND user_id != ?`,
+            [
+                conversationId,
+                senderId
+            ]
+        );
+
+        // create a receipt for each recipient
+        if (recipients.length > 0) {
+
+            const receiptValues = recipients.map(
+                (recipient) => [
+                    result.insertId,
+                    recipient.user_id
+                ]
+            );
+
+            await db.query(
+                `INSERT INTO message_receipts
+                (
+                    message_id,
+                    user_id
+                )
+                VALUES ?`,
+                [receiptValues]
+            );
+        }
+
         // get the newly created message
         const [messages] = await db.query(
             `SELECT
@@ -93,6 +126,10 @@ const sendMessage = async (req, res) => {
             isEdited: message.is_edited,
             editedAt: message.edited_at,
             createdAt: message.created_at,
+
+            status: "sent",
+            deliveredAt: null,
+            readAt: null,
 
             sender: {
                 id: message.sender_id,
@@ -157,7 +194,7 @@ const getMessages = async (req, res) => {
             });
         }
 
-        // get messages from the conversation
+        // get messages and receipt information
         const [messages] = await db.query(
             `SELECT
                 m.id,
@@ -173,12 +210,18 @@ const getMessages = async (req, res) => {
 
                 u.username,
                 u.display_name,
-                u.profile_picture
+                u.profile_picture,
+
+                mr.delivered_at,
+                mr.read_at
 
             FROM messages m
 
             INNER JOIN users u
                 ON u.id = m.sender_id
+
+            LEFT JOIN message_receipts mr
+                ON mr.message_id = m.id
 
             WHERE m.conversation_id = ?
 
@@ -186,25 +229,62 @@ const getMessages = async (req, res) => {
             [conversationId]
         );
 
-        // format messages
-        const formattedMessages = messages.map((message) => ({
-            id: message.id,
-            conversationId: message.conversation_id,
-            type: message.message_type,
-            content: message.content,
-            fileUrl: message.file_url,
-            replyToId: message.reply_to_id,
-            isEdited: message.is_edited,
-            editedAt: message.edited_at,
-            createdAt: message.created_at,
 
-            sender: {
-                id: message.sender_id,
-                username: message.username,
-                displayName: message.display_name,
-                profilePicture: message.profile_picture,
-            },
-        }));
+        // format messages
+        const formattedMessages = messages.map(
+            (message) => {
+
+                let status = "sent";
+
+
+                if (message.delivered_at) {
+                    status = "delivered";
+                }
+
+
+                if (message.read_at) {
+                    status = "read";
+                }
+
+
+                return {
+                    id: message.id,
+                    conversationId:
+                        message.conversation_id,
+                    type:
+                        message.message_type,
+                    content:
+                        message.content,
+                    fileUrl:
+                        message.file_url,
+                    replyToId:
+                        message.reply_to_id,
+                    isEdited:
+                        message.is_edited,
+                    editedAt:
+                        message.edited_at,
+                    createdAt:
+                        message.created_at,
+
+                    status,
+                    deliveredAt:
+                        message.delivered_at,
+                    readAt:
+                        message.read_at,
+
+                    sender: {
+                        id:
+                            message.sender_id,
+                        username:
+                            message.username,
+                        displayName:
+                            message.display_name,
+                        profilePicture:
+                            message.profile_picture,
+                    },
+                };
+            }
+        );
 
 
         return res.status(200).json({

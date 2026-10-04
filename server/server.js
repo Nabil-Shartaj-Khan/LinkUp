@@ -107,13 +107,10 @@ const connectedUsers = new Map();
 // authenticate socket connection
 io.use((socket, next) => {
     try {
-
         const token =
             socket.handshake.auth.token;
 
-
         if (!token) {
-
             return next(
                 new Error(
                     "Authentication required"
@@ -121,17 +118,14 @@ io.use((socket, next) => {
             );
         }
 
-
         const decoded = jwt.verify(
             token,
             process.env.JWT_SECRET
         );
 
-
         // store authenticated user id
         socket.userId =
             decoded.userId;
-
 
         next();
 
@@ -295,104 +289,321 @@ io.on("connection", async (socket) => {
             }
         }
     );
-// handle typing start
-socket.on(
-    "typing_start",
-    async (conversationId) => {
-
-        try {
-
-            // verify conversation membership
-            const [memberships] = await db.query(
-                `SELECT id
-                FROM conversation_members
-                WHERE conversation_id = ?
-                AND user_id = ?`,
-                [
-                    conversationId,
-                    userId
-                ]
-            );
 
 
-            if (memberships.length === 0) {
-                return;
-            }
+    // handle message delivery acknowledgement
+    socket.on(
+        "message_delivered",
+        async (messageId) => {
+
+            try {
+
+                const numericMessageId =
+                    Number(messageId);
 
 
-            // notify other users in the conversation
-            socket
-                .to(`conversation:${conversationId}`)
-                .emit(
-                    "user_typing",
+                if (!numericMessageId) {
+                    return;
+                }
+
+
+                // verify that this user is the message recipient
+                const [receipts] =
+                    await db.query(
+                        `SELECT
+                            mr.id,
+                            mr.message_id,
+                            mr.delivered_at,
+                            m.sender_id,
+                            m.conversation_id
+
+                        FROM message_receipts mr
+
+                        INNER JOIN messages m
+                            ON m.id = mr.message_id
+
+                        WHERE mr.message_id = ?
+                        AND mr.user_id = ?`,
+                        [
+                            numericMessageId,
+                            userId
+                        ]
+                    );
+
+
+                if (receipts.length === 0) {
+                    return;
+                }
+
+
+                const receipt =
+                    receipts[0];
+
+
+                // do not overwrite an existing delivery timestamp
+                if (receipt.delivered_at) {
+                    return;
+                }
+
+
+                const deliveredAt =
+                    new Date();
+
+
+                // mark the message as delivered
+                await db.query(
+                    `UPDATE message_receipts
+                    SET delivered_at = ?
+                    WHERE message_id = ?
+                    AND user_id = ?
+                    AND delivered_at IS NULL`,
+                    [
+                        deliveredAt,
+                        numericMessageId,
+                        userId
+                    ]
+                );
+
+
+                // notify the sender
+                io.to(
+                    `user:${receipt.sender_id}`
+                ).emit(
+                    "message_delivery_updated",
                     {
+                        messageId:
+                            numericMessageId,
+
                         conversationId:
-                            Number(conversationId),
+                            Number(
+                                receipt.conversation_id
+                            ),
 
                         userId,
-                        isTyping: true,
+
+                        deliveredAt,
                     }
                 );
 
-        } catch (error) {
+            } catch (error) {
 
-            console.error(
-                "typing start error:",
-                error
-            );
-        }
-    }
-);
-
-
-// handle typing stop
-socket.on(
-    "typing_stop",
-    async (conversationId) => {
-
-        try {
-
-            // verify conversation membership
-            const [memberships] = await db.query(
-                `SELECT id
-                FROM conversation_members
-                WHERE conversation_id = ?
-                AND user_id = ?`,
-                [
-                    conversationId,
-                    userId
-                ]
-            );
-
-
-            if (memberships.length === 0) {
-                return;
+                console.error(
+                    "message delivery error:",
+                    error
+                );
             }
+        }
+    );
+
+// handle message read acknowledgement
+    socket.on(
+        "message_read",
+        async (messageId) => {
+
+            try {
+
+                const numericMessageId =
+                    Number(messageId);
 
 
-            // notify other users in the conversation
-            socket
-                .to(`conversation:${conversationId}`)
-                .emit(
-                    "user_typing",
+                if (!numericMessageId) {
+                    return;
+                }
+
+
+                // verify that this user is the message recipient
+                const [receipts] =
+                    await db.query(
+                        `SELECT
+                            mr.id,
+                            mr.message_id,
+                            mr.delivered_at,
+                            mr.read_at,
+                            m.sender_id,
+                            m.conversation_id
+
+                        FROM message_receipts mr
+
+                        INNER JOIN messages m
+                            ON m.id = mr.message_id
+
+                        WHERE mr.message_id = ?
+                        AND mr.user_id = ?`,
+                        [
+                            numericMessageId,
+                            userId
+                        ]
+                    );
+
+
+                if (receipts.length === 0) {
+                    return;
+                }
+
+
+                const receipt =
+                    receipts[0];
+
+
+                // do not overwrite an existing read timestamp
+                if (receipt.read_at) {
+                    return;
+                }
+
+
+                const readAt =
+                    new Date();
+
+
+                // mark message as delivered and read
+                await db.query(
+                    `UPDATE message_receipts
+                    SET
+                        delivered_at = COALESCE(
+                            delivered_at,
+                            ?
+                        ),
+                        read_at = ?
+                    WHERE message_id = ?
+                    AND user_id = ?
+                    AND read_at IS NULL`,
+                    [
+                        readAt,
+                        readAt,
+                        numericMessageId,
+                        userId
+                    ]
+                );
+
+
+                // notify the sender
+                io.to(
+                    `user:${receipt.sender_id}`
+                ).emit(
+                    "message_read_updated",
                     {
+                        messageId:
+                            numericMessageId,
+
                         conversationId:
-                            Number(conversationId),
+                            Number(
+                                receipt.conversation_id
+                            ),
 
                         userId,
-                        isTyping: false,
+
+                        readAt,
                     }
                 );
 
-        } catch (error) {
+            } catch (error) {
 
-            console.error(
-                "typing stop error:",
-                error
-            );
+                console.error(
+                    "message read error:",
+                    error
+                );
+            }
         }
-    }
-);
+    );
+    // handle typing start
+    socket.on(
+        "typing_start",
+        async (conversationId) => {
+
+            try {
+
+                // verify conversation membership
+                const [memberships] = await db.query(
+                    `SELECT id
+                    FROM conversation_members
+                    WHERE conversation_id = ?
+                    AND user_id = ?`,
+                    [
+                        conversationId,
+                        userId
+                    ]
+                );
+
+
+                if (memberships.length === 0) {
+                    return;
+                }
+
+
+                // notify other users in the conversation
+                socket
+                    .to(`conversation:${conversationId}`)
+                    .emit(
+                        "user_typing",
+                        {
+                            conversationId:
+                                Number(conversationId),
+
+                            userId,
+                            isTyping: true,
+                        }
+                    );
+
+            } catch (error) {
+
+                console.error(
+                    "typing start error:",
+                    error
+                );
+            }
+        }
+    );
+
+
+    // handle typing stop
+    socket.on(
+        "typing_stop",
+        async (conversationId) => {
+
+            try {
+
+                // verify conversation membership
+                const [memberships] = await db.query(
+                    `SELECT id
+                    FROM conversation_members
+                    WHERE conversation_id = ?
+                    AND user_id = ?`,
+                    [
+                        conversationId,
+                        userId
+                    ]
+                );
+
+
+                if (memberships.length === 0) {
+                    return;
+                }
+
+
+                // notify other users in the conversation
+                socket
+                    .to(`conversation:${conversationId}`)
+                    .emit(
+                        "user_typing",
+                        {
+                            conversationId:
+                                Number(conversationId),
+
+                            userId,
+                            isTyping: false,
+                        }
+                    );
+
+            } catch (error) {
+
+                console.error(
+                    "typing stop error:",
+                    error
+                );
+            }
+        }
+    );
+
 
     // handle socket disconnect
     socket.on(

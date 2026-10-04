@@ -9,6 +9,23 @@ export default function MessageBubble({
         Number(currentUserId);
 
 
+    // get message status indicator
+    const getMessageStatus = () => {
+
+        if (message.status === "read") {
+            return "✓✓ Read";
+        }
+
+
+        if (message.status === "delivered") {
+            return "✓✓ Delivered";
+        }
+
+
+        return "✓ Sent";
+    };
+
+
     return (
         <div
             className={`flex ${
@@ -31,23 +48,36 @@ export default function MessageBubble({
                 </p>
 
 
-                <p
-                    className={`text-xs mt-1 ${
+                <div
+                    className={`flex items-center gap-2 mt-1 ${
                         isMine
-                            ? "text-gray-300"
-                            : "text-gray-500"
+                            ? "justify-end text-gray-300"
+                            : "justify-start text-gray-500"
                     }`}
                 >
-                    {new Date(
-                        message.createdAt
-                    ).toLocaleTimeString(
-                        [],
-                        {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                        }
+
+                    <p className="text-xs">
+                        {new Date(
+                            message.createdAt
+                        ).toLocaleTimeString(
+                            [],
+                            {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                            }
+                        )}
+                    </p>
+
+
+                    {isMine && (
+
+                        <p className="text-xs">
+                            {getMessageStatus()}
+                        </p>
+
                     )}
-                </p>
+
+                </div>
 
             </div>
 

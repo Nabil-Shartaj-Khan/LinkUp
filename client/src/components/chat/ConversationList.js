@@ -5,10 +5,12 @@ export default function ConversationList({
     conversations,
     selectedConversation,
     onOpenConversation,
+    currentUserId,
 }) {
 
     // show empty conversation state
     if (conversations.length === 0) {
+
         return (
             <div className="flex-1 overflow-y-auto">
 
@@ -24,23 +26,30 @@ export default function ConversationList({
     return (
         <div className="flex-1 overflow-y-auto">
 
-            {conversations.map((conversation) => (
+            {conversations.map(
+                (conversation) => (
 
-                <ConversationItem
-                    key={conversation.id}
-                    conversation={conversation}
-                    isSelected={
-                        Number(
-                            selectedConversation?.id
-                        ) ===
-                        Number(
-                            conversation.id
-                        )
-                    }
-                    onOpen={onOpenConversation}
-                />
+                    <ConversationItem
+                        key={conversation.id}
+                        conversation={conversation}
+                        isSelected={
+                            Number(
+                                selectedConversation?.id
+                            ) ===
+                            Number(
+                                conversation.id
+                            )
+                        }
+                        onOpen={
+                            onOpenConversation
+                        }
+                        currentUserId={
+                            currentUserId
+                        }
+                    />
 
-            ))}
+                )
+            )}
 
         </div>
     );

@@ -223,6 +223,34 @@ export default function ChatPage() {
             conversation
         );
 
+
+        // clear unread count when conversation is opened
+        setConversations(
+            (previousConversations) =>
+                previousConversations.map(
+                    (currentConversation) => {
+
+                        if (
+                            Number(
+                                currentConversation.id
+                            ) !==
+                            Number(
+                                conversation.id
+                            )
+                        ) {
+                            return currentConversation;
+                        }
+
+
+                        return {
+                            ...currentConversation,
+                            unreadCount: 0,
+                        };
+                    }
+                )
+        );
+
+
         setMessages([]);
 
         setMessagesLoading(true);
@@ -247,8 +275,43 @@ export default function ChatPage() {
             );
 
 
+            const loadedMessages =
+                response.data.messages;
+
+
             setMessages(
-                response.data.messages
+                loadedMessages
+            );
+
+
+            // mark received unread messages as read
+            loadedMessages.forEach(
+                (message) => {
+
+                    const isReceivedMessage =
+                        Number(
+                            message.sender?.id
+                        ) !==
+                        Number(
+                            currentUser?.id
+                        );
+
+
+                    const isUnread =
+                        message.status !== "read";
+
+
+                    if (
+                        isReceivedMessage &&
+                        isUnread
+                    ) {
+
+                        socket.emit(
+                            "message_read",
+                            message.id
+                        );
+                    }
+                }
             );
 
         } catch (error) {
